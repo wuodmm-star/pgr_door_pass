@@ -1,0 +1,7 @@
+build/
+install/
+log/
+core/*.o
+core/*.a
+core/test_pgr_door
+__pycache__/

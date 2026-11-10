@@ -1,0 +1,47 @@
+cmake_minimum_required(VERSION 3.8)
+project(pgr_door_pass C CXX)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_CXX_STANDARD 17)
+
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_ros REQUIRED)
+
+# C core (no ROS dependency)
+add_library(pgr_door_core STATIC core/src/pgr_door.c)
+target_include_directories(pgr_door_core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core/include> $<INSTALL_INTERFACE:include>)
+set_target_properties(pgr_door_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(pgr_door_core m)
+
+add_executable(door_pass_node src/door_pass_node.cpp)
+target_link_libraries(door_pass_node pgr_door_core)
+ament_target_dependencies(door_pass_node rclcpp sensor_msgs geometry_msgs nav_msgs std_msgs std_srvs tf2 tf2_ros)
+
+install(TARGETS pgr_door_core EXPORT export_pgr_door_pass ARCHIVE DESTINATION lib)
+install(FILES core/include/pgr_door.h DESTINATION include)
+install(TARGETS door_pass_node DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch config DESTINATION share/${PROJECT_NAME})
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/sim)
+  install(DIRECTORY sim DESTINATION share/${PROJECT_NAME})
+endif()
+
+if(BUILD_TESTING)
+  add_executable(test_pgr_door core/test/test_core.c)
+  target_link_libraries(test_pgr_door pgr_door_core)
+  add_test(NAME test_pgr_door COMMAND test_pgr_door)
+endif()
+
+ament_export_include_directories(include)
+ament_export_targets(export_pgr_door_pass)
+ament_package()

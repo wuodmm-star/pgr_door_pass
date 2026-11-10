@@ -1,0 +1,32 @@
+# Rear-wheel-drive powered wheelchair with front casters, footprint 1.05 m x 0.66 m about the drive axle.
+door_pass:
+  ros__parameters:
+    base_frame: base_link
+    odom_frame: odom
+    map_frame: map
+    scan_topic: scan
+    odom_topic: odom
+    cmd_vel_topic: cmd_vel
+    rate: 10.0
+    autostart: false
+    use_detection: true
+    # door in the map frame (centre of the opening on the wall mid-plane; yaw = wall normal, either side)
+    door.x: 0.0
+    door.y: 0.0
+    door.yaw: 0.0
+    door.wall_thickness: 0.12
+    # footprint about the rotation centre (drive axle)
+    footprint.xmin: -0.25
+    footprint.xmax: 0.80
+    footprint.half_width: 0.33
+    # PGR law (pgr.pre <= 0: derived = xmax + wall/2 + 5 v_near / k = 1.61 m here)
+    pgr.n: 3.0
+    pgr.k: 2.0
+    pgr.pre: 0.0
+    v_far: 0.6
+    v_near: 0.3
+    w_max: 1.0
+    exit_distance: 2.0
+    goal_tolerance: 0.4
+    detect.min_width: 0.55
+    detect.max_width: 1.3

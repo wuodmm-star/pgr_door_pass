@@ -1,0 +1,131 @@
+<?xml version="1.0"?>
+<!-- Rear-wheel-drive powered wheelchair with two free front casters (pgr_door_pass demo robot).
+     base_link origin = centre of the drive axle on the ground plane projection (x forward).
+     Footprint x in [-0.25, 0.80], y in [-0.33, 0.33]. 120 kg with occupant, ~70 % on the drive wheels. -->
+<robot name="wheelchair">
+  <link name="base_link"/>
+  <joint name="chassis_joint" type="fixed">
+    <parent link="base_link"/><child link="chassis"/><origin xyz="0 0 0"/>
+  </joint>
+  <link name="chassis">
+    <inertial>
+      <origin xyz="0.15 0 0.45"/>
+      <mass value="104"/>
+      <inertia ixx="9.0" ixy="0" ixz="0" iyy="12.0" iyz="0" izz="13.0"/>
+    </inertial>
+    <collision name="body">
+      <origin xyz="0.275 0 0.225"/>
+      <geometry><box size="1.05 0.66 0.25"/></geometry>
+    </collision>
+    <visual name="body_v">
+      <origin xyz="0.275 0 0.225"/>
+      <geometry><box size="1.05 0.66 0.25"/></geometry>
+    </visual>
+  </link>
+
+  <!-- drive wheels -->
+  <link name="wheel_l">
+    <inertial><mass value="3"/><inertia ixx="0.022" ixy="0" ixz="0" iyy="0.043" iyz="0" izz="0.022"/></inertial>
+    <collision><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.17" length="0.05"/></geometry></collision>
+    <visual><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.17" length="0.05"/></geometry></visual>
+  </link>
+  <link name="wheel_r">
+    <inertial><mass value="3"/><inertia ixx="0.022" ixy="0" ixz="0" iyy="0.043" iyz="0" izz="0.022"/></inertial>
+    <collision><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.17" length="0.05"/></geometry></collision>
+    <visual><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.17" length="0.05"/></geometry></visual>
+  </link>
+  <joint name="wheel_l_joint" type="continuous">
+    <parent link="chassis"/><child link="wheel_l"/><origin xyz="0 0.30 0.17"/><axis xyz="0 1 0"/>
+  </joint>
+  <joint name="wheel_r_joint" type="continuous">
+    <parent link="chassis"/><child link="wheel_r"/><origin xyz="0 -0.30 0.17"/><axis xyz="0 1 0"/>
+  </joint>
+
+  <!-- free front casters: swivel (vertical) + rolling joint, wheel 5 cm behind the swivel axis -->
+  <link name="fork_l"><inertial><mass value="0.5"/><inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/></inertial></link>
+  <link name="fork_r"><inertial><mass value="0.5"/><inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/></inertial></link>
+  <joint name="caster_l_swivel" type="continuous">
+    <parent link="chassis"/><child link="fork_l"/><origin xyz="0.50 0.25 0.20"/><axis xyz="0 0 1"/>
+    <dynamics damping="0.02" friction="0.05"/>
+  </joint>
+  <joint name="caster_r_swivel" type="continuous">
+    <parent link="chassis"/><child link="fork_r"/><origin xyz="0.50 -0.25 0.20"/><axis xyz="0 0 1"/>
+    <dynamics damping="0.02" friction="0.05"/>
+  </joint>
+  <link name="caster_wheel_l">
+    <inertial><mass value="0.6"/><inertia ixx="0.001" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.001"/></inertial>
+    <collision><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.075" length="0.04"/></geometry></collision>
+    <visual><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.075" length="0.04"/></geometry></visual>
+  </link>
+  <link name="caster_wheel_r">
+    <inertial><mass value="0.6"/><inertia ixx="0.001" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.001"/></inertial>
+    <collision><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.075" length="0.04"/></geometry></collision>
+    <visual><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.075" length="0.04"/></geometry></visual>
+  </link>
+  <joint name="caster_l_wheel" type="continuous">
+    <parent link="fork_l"/><child link="caster_wheel_l"/><origin xyz="-0.05 0 -0.125"/><axis xyz="0 1 0"/>
+  </joint>
+  <joint name="caster_r_wheel" type="continuous">
+    <parent link="fork_r"/><child link="caster_wheel_r"/><origin xyz="-0.05 0 -0.125"/><axis xyz="0 1 0"/>
+  </joint>
+
+  <!-- lidar on the footrest, above the body -->
+  <link name="laser"><inertial><mass value="0.2"/><inertia ixx="1e-4" ixy="0" ixz="0" iyy="1e-4" iyz="0" izz="1e-4"/></inertial></link>
+  <joint name="laser_joint" type="fixed">
+    <parent link="chassis"/><child link="laser"/><origin xyz="0.70 0 0.42"/>
+  </joint>
+
+  <gazebo reference="wheel_l"><mu1>1.0</mu1><mu2>1.0</mu2><kp>1e6</kp><kd>100</kd></gazebo>
+  <gazebo reference="wheel_r"><mu1>1.0</mu1><mu2>1.0</mu2><kp>1e6</kp><kd>100</kd></gazebo>
+  <gazebo reference="caster_wheel_l"><mu1>0.8</mu1><mu2>0.8</mu2><kp>1e6</kp><kd>100</kd></gazebo>
+  <gazebo reference="caster_wheel_r"><mu1>0.8</mu1><mu2>0.8</mu2><kp>1e6</kp><kd>100</kd></gazebo>
+  <gazebo reference="chassis"><mu1>0.3</mu1><mu2>0.3</mu2></gazebo>
+
+  <gazebo>
+    <plugin name="diff_drive" filename="libgazebo_ros_diff_drive.so">
+      <left_joint>wheel_l_joint</left_joint>
+      <right_joint>wheel_r_joint</right_joint>
+      <wheel_separation>0.60</wheel_separation>
+      <wheel_diameter>0.34</wheel_diameter>
+      <max_wheel_torque>60</max_wheel_torque>
+      <max_wheel_acceleration>4.7</max_wheel_acceleration>
+      <command_topic>cmd_vel</command_topic>
+      <publish_odom>true</publish_odom>
+      <publish_odom_tf>true</publish_odom_tf>
+      <publish_wheel_tf>false</publish_wheel_tf>
+      <odometry_topic>odom</odometry_topic>
+      <odometry_frame>odom</odometry_frame>
+      <robot_base_frame>base_link</robot_base_frame>
+      <odometry_source>1</odometry_source>
+      <update_rate>50</update_rate>
+    </plugin>
+    <plugin name="truth" filename="libgazebo_ros_p3d.so">
+      <ros><remapping>odom:=ground_truth</remapping></ros>
+      <body_name>base_link</body_name>
+      <frame_name>world</frame_name>
+      <update_rate>50</update_rate>
+    </plugin>
+    <plugin name="joint_states" filename="libgazebo_ros_joint_state_publisher.so">
+      <update_rate>20</update_rate>
+      <joint_name>caster_l_swivel</joint_name>
+      <joint_name>caster_r_swivel</joint_name>
+    </plugin>
+  </gazebo>
+  <gazebo reference="laser">
+    <sensor name="lidar" type="ray">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <ray>
+        <scan><horizontal><samples>541</samples><resolution>1</resolution>
+          <min_angle>-2.3561945</min_angle><max_angle>2.3561945</max_angle></horizontal></scan>
+        <range><min>0.05</min><max>8.0</max><resolution>0.01</resolution></range>
+        <noise><type>gaussian</type><mean>0.0</mean><stddev>0.02</stddev></noise>
+      </ray>
+      <plugin name="scan" filename="libgazebo_ros_ray_sensor.so">
+        <ros><remapping>~/out:=scan</remapping></ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>laser</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+</robot>

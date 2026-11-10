@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>pgr_door_pass</name>
+  <version>0.1.0</version>
+  <description>One-go narrow-door passing for differential-drive robots (powered wheelchairs, AMRs): PGR (Path-Generating Regulator) wells in the door frame + 2D-lidar door-frame detection. Core in C99 (libm only).</description>
+  <maintainer email="wuodmm@gmail.com">wuodmm-star</maintainer>
+  <license>Apache-2.0</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>std_srvs</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <exec_depend>launch_ros</exec_depend>
+  <test_depend>ament_cmake_test</test_depend>
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>
