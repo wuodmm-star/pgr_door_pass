@@ -97,6 +97,11 @@ give control back once `~/state` reports `done`.
 ros2 launch pgr_door_pass demo.launch.py door_width:=0.75 x:=-3.2 y:=1.0 yaw:=-0.5
 ```
 
+Checked with this node (not the benchmark harness), 3 oblique starts per door, ground-truth footprint vs. jamb
+corners: 0.90 m 3/3 through (closest 11.4–11.7 cm), 0.80 m 3/3 (6.4–6.6 cm), 0.72 m 3/3 (2.1–2.6 cm; 3 cm is the
+maximum possible), no stop, no turning on the spot. On WSL2 the Gazebo-classic real-time throttle can collapse;
+pass `pacer_plugin:=<path to a real-time pacer>` or run on native Linux.
+
 ## Limitations
 
 - Differential drive (rotation centre on the drive axle). A car-like (front-steering) base needs a turning-radius
