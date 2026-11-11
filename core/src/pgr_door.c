@@ -92,9 +92,12 @@ int pgrd_ctrl_step_body(pgrd_ctrl *c, pgrd_pose pose, double v_meas, double *vx,
     int near_door = pose.x > -c->pre - 0.5 && pose.x < 1.0;
     double speed = near_door ? p->v_near : p->v_far;
     double th = pgrd_flow_heading(pose.x, pose.y, well, p->n);
-    if (p->chassis == PGRD_4WS) {                     /* motion along the flow, heading to the door normal */
+    if (p->chassis == PGRD_4WS) {   /* motion along the flow; heading = the one closest to the door normal that keeps
+                                        the crab angle within beta_max (it turns only when crabbing alone is not enough) */
+        double dev = clampd(pgrd_wrap(th - well.th), -p->beta_max, p->beta_max);
+        double th_head = pgrd_wrap(th - dev);
         double beta = clampd(pgrd_wrap(th - pose.th), -p->beta_max, p->beta_max);
-        *wz = clampd(p->k * pgrd_wrap(well.th - pose.th), -p->w_max, p->w_max);
+        *wz = clampd(p->k * pgrd_wrap(th_head - pose.th), -p->w_max, p->w_max);
         *vx = speed * cos(beta);
         *vy = speed * sin(beta);
         return c->stage;

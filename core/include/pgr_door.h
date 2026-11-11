@@ -72,8 +72,9 @@ void pgrd_ctrl_init(pgrd_ctrl *c, const pgrd_params *p);
 /* pose: reference point in the door frame (drive axle for differential / Ackermann, body centre for 4WS);
  * v_meas: measured speed. Body-frame command (vx, vy, wz); vy != 0 only for 4WS (crab). Returns the stage.
  *   differential: heading follows the flow;  Ackermann: same, |wz| <= v / r_min;
- *   4WS: the DIRECTION OF MOTION follows the flow (crab angle <= beta_max) while the heading is turned to the door
- *        normal, so lateral offsets are removed by translating, not by swinging the body. */
+ *   4WS: the DIRECTION OF MOTION follows the flow; the heading is the one closest to the door normal that keeps the
+ *        crab angle <= beta_max (it turns only when crabbing alone is not enough), so lateral offsets are removed by
+ *        translating rather than by swinging the body. */
 int pgrd_ctrl_step_body(pgrd_ctrl *c, pgrd_pose pose, double v_meas, double *vx, double *vy, double *wz);
 /* differential-drive form: (v, w) */
 int pgrd_ctrl_step(pgrd_ctrl *c, pgrd_pose pose, double v_meas, double *v_cmd, double *w_cmd);

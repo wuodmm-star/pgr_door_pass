@@ -54,7 +54,7 @@ def setup(context):
     if chassis == 'ackermann':                        # SDF model origin = rear axle; odom -> rear_axle from the plugin
         model = os.path.join(share, 'sim', 'urdf', 'wheelchair_steer.sdf')
         z = 0.06
-        static = [('0.70', '0.42', 'rear_axle', 'laser')]  # lidar 0.425 m ahead of the body centre (0.275 + 0.425)
+        static = [('0.70', '0.47', 'rear_axle', 'laser')]  # lidar 0.425 m ahead of the body centre (0.275 + 0.425), on top
         cfg, extra = 'ackermann.yaml', {'base_frame': 'rear_axle', 'ackermann.output_steering_angle': True}
     elif chassis == '4ws':
         with open(os.path.join(share, 'sim', 'urdf', 'base_4ws.urdf')) as f:

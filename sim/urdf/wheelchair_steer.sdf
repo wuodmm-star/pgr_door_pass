@@ -33,7 +33,8 @@
         <geometry><box><size>1.05 0.66 0.25</size></box></geometry>
       </collision>
           <sensor name="lidar" type="ray">
-        <pose>0.425 0 0.12 0 0 0</pose>
+        <!-- 0.17 above the chassis frame: on top of the body box (its top is at +0.125); inside it the rays hit the body -->
+        <pose>0.425 0 0.17 0 0 0</pose>
         <always_on>true</always_on>
         <update_rate>10</update_rate>
         <ray>

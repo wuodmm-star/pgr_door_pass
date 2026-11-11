@@ -32,7 +32,7 @@ to the well heading. The robot heading follows the flow:
 |---|---|---|---|
 | differential (`config/wheelchair.yaml`) | drive axle | heading follows the flow (above), `n = 3` | `cmd_vel` (v, ω) |
 | Ackermann (`config/ackermann.yaml`) | rear axle | same law with the curvature bound `|ω| ≤ v / R_min`; `n = 2` (lower peak curvature of the streamlines); the approach well is moved out so that the car can straighten with a bounded curvature: `pre = x_front + wall/2 + max(5·v_near/k, 2·sqrt(0.2·R_min))` (1.75 m for R_min = 1 m) | (v, ω), or `angular.z` = front steering angle `atan(L·ω/v)` with `ackermann.output_steering_angle: true` |
-| 4D4T (`config/4ws.yaml`) | body centre | the **direction of motion** follows the flow (crab angle ≤ `4ws.max_crab_angle`) while the heading is turned to the door normal, so lateral offsets are removed by translating, not by swinging the body | (vx, vy, ω) |
+| 4D4T (`config/4ws.yaml`) | body centre | the **direction of motion** follows the flow; the heading is the one closest to the door normal that keeps the crab angle ≤ `4ws.max_crab_angle` (it turns only when crabbing alone is not enough), so lateral offsets are removed by translating rather than by swinging the body | (vx, vy, ω) |
 
 It is pure state feedback: when the robot is pushed off (caster swing, wheel slip, a jump of the door estimate) it
 is pulled back towards a streamline from wherever it is — no re-planning, no optimisation.
@@ -91,6 +91,40 @@ advance with oblique crossings (curvature-bounded candidates, exact footprint ch
 89 % (91 % with PGR streamlines as the connecting curves, 64 % with Dubins curves). Tracking a plan that was committed
 before the door is less robust to the caster disturbances than the PGR feedback.
 
+### Ackermann and 4D4T: same exam, 200 episodes per controller
+
+Same Gazebo exam (4 door widths × 50 starts, 2D lidar with 2 cm noise, localization error + lidar door detection,
+1× real time), run with the published C core (`core/`) and, as baselines, the Nav2 Humble controllers the Nav2 docs
+recommend for each kinematics. **One go** = goal reached with no collision, no reversing, no turning on the spot,
+no stop.
+
+Ackermann (front steering 35°, R_min ≈ 0.87 m; a car cannot turn on the spot, so the starts are 3.8–4.6 m out,
+heading ±35°):
+
+| controller | 0.90 m | 0.80 m | 0.75 m | 0.72 m | all | main failure |
+|---|---|---|---|---|---|---|
+| **pgr_door_pass** | **50/50** | **48/50** | **49/50** | **48/50** | **97.5 %** | 3 collisions |
+| Nav2 MPPI (Ackermann model, min_turning_r 1.0) | 34/50 | 2/50 | 0/50 | 0/50 | 18 % | 63 collisions, 45 aborts |
+| Nav2 RPP + Smac Hybrid-A* | 21/50 | 3/50 | 0/50 | 0/50 | 12 % | 122 aborts ("collision ahead") |
+
+4D4T (four driven, independently steered wheels; same starts as the differential exam, 2.5–4 m, ±60°):
+
+| controller | 0.90 m | 0.80 m | 0.75 m | 0.72 m | all | main failure |
+|---|---|---|---|---|---|---|
+| **pgr_door_pass** | **47/50** | **43/50** | **42/50** | **41/50** | **86.5 %** | 27 collisions |
+| Nav2 DWB (holonomic, vy ≤ 0.4 m/s) | 44/50 | 19/50 | 3/50 | 2/50 | 34 % | 132 collisions |
+| Nav2 MPPI (Omni model) | 15/50 | 0/50 | 0/50 | 0/50 | 7.5 % | 102 timeouts, 58 aborts |
+
+Paired exact McNemar tests on the same 200 episodes: Ackermann pgr_door_pass vs MPPI 159 : 0 (p ≈ 3·10⁻⁴⁸), vs RPP
+171 : 0 (p ≈ 7·10⁻⁵²); 4D4T vs DWB 108 : 3 (p ≈ 2·10⁻²⁸), vs MPPI 160 : 2 (p ≈ 5·10⁻⁴⁵). At 0.72 m the Nav2 global
+planners found no path (5 cm costmap cells). The 27 4D4T collisions all come from 10 starts that are close to the
+wall (2.5–3 m) with a large heading (40–55°) or offset (1.6–1.7 m): a body corner touches the wall next to the door;
+a kinematic model of the same base does not reproduce them (200/200), so the steering transients of the wheel
+modules are the suspect. Control law CPU time: 0.06 ms per cycle; Nav2 `controller_server` 8–47 ms per cycle
+(includes the local costmap). Nav2 settings: `nav2/` of the benchmark (Humble 1.1.20 defaults except footprint,
+speed limits, inflation; MPPI from the Nav2 docs example). Gazebo runs where the simulated base blew up (NaN) were
+detected and repeated with a fresh model.
+
 Results are from simulation only; the robot has not been tested on hardware yet.
 
 ## Build
@@ -134,17 +168,13 @@ corners, 1.05 m × 0.66 m body for all three (so 12 / 7 / 3 cm is the largest po
 | chassis (Gazebo model) | 0.90 m | 0.80 m | 0.72 m |
 |---|---|---|---|
 | differential, free swivel casters (`gazebo_ros_diff_drive`) | 3/3, 11.4–11.7 cm | 3/3, 6.4–6.6 cm | 6/6, 2.1–2.8 cm |
-| Ackermann, front steering 35°, R_min ≈ 0.87 m (`gazebo_ros_ackermann_drive`), starts 4.2–4.6 m away | 3/3, 10.4–11.4 cm | 3/3, 5.2–5.9 cm | 3/3, 1.3–1.9 cm |
-| 4D4T, four steered driven wheels (`sim/plugins/four_ws_drive.cc`) | 3/3, 10.6–10.8 cm | 3/3, 4.8–6.8 cm | 3/3, 0.7–2.8 cm |
 
-No stop, no turning on the spot, no reversing in any of these runs. One Ackermann run had to be restarted because
-Gazebo (on WSL2) did not place the model at its start pose; the run was repeated and is counted once. On WSL2 the Gazebo-classic real-time throttle can collapse;
+No stop, no turning on the spot, no reversing. For the Ackermann and 4D4T bases see the 200-episode results above. On WSL2 the Gazebo-classic real-time throttle can collapse;
 pass `pacer_plugin:=<path to a real-time pacer>` or run on native Linux.
 
 ## Limitations
 
-- The 200-episode benchmark is for the differential-drive wheelchair; the Ackermann and 4D4T bases were checked
-  with 3 starts per door width in the Gazebo demo.
+- 4D4T: 86.5 % one go; starts close to the wall with a large heading or offset still fail (see above).
 - Ackermann: the car cannot turn on the spot, so it needs room: the approach well is ~1.75 m in front of the door
   and the car should take over ~4 m out. Starts closer or more oblique than that are not handled (no reversing).
 - The approach zone in front of the door must be free of other obstacles: the law does not avoid obstacles, it only
@@ -193,11 +223,12 @@ Apache-2.0
 - **Gazebo 评测**（万向轮为真实自由关节，4 种门宽 × 50 个起点）：一次通过率 97%（0.72 m 门 96%），
   Nav2 的 DWB 为 41%，RPP、Vector Pursuit、Graceful、TEB 为 2–4%（多数在门前判断"要碰撞"而停下放弃）。
 - **三种底盘**：差速＝车头跟着 PGR 流线走；阿克曼＝同一律加转弯半径限制（n=2，门前势井放远到约 1.75 m，留出摆正的距离）；
-  4D4T＝**行进方向**跟着流线、车头一直对着门的法线，用横移消掉横向偏差，车身不用甩。
-  Gazebo 演示（每种门宽 3 个斜向起点）：三种底盘在 0.90 / 0.80 / 0.72 m 门全部一次通过，离门框最近
-  阿克曼 1.3–1.9 cm、4D4T 0.7–2.8 cm、差速 2.1–2.8 cm（0.72 m 门理论最大 3 cm）。
-- **局限**：200 局正式评测只做了差速轮椅；阿克曼不能原地转，要在门前约 4 m 接手；门前接近区内不能有其他障碍物；
-  目前只有仿真结果。
+  4D4T＝**行进方向**跟着流线，车头在斜走角不超限的前提下尽量对着门（斜走不够时才转一点），用横移消掉横向偏差，车身不用甩。
+  **200 局正式评测**（4 种门宽 × 50 个起点，对照 Nav2 官方推荐的控制器）：阿克曼一次通过 **97.5 %**
+  （Nav2 MPPI 18 %、RPP+混合A* 12 %）；4D4T **86.5 %**（Nav2 DWB 34 %、MPPI 7.5 %）；配对检验 p < 10⁻²⁷。
+  4D4T 的失败集中在离墙近、朝向很斜的 10 个起点（车角蹭到门旁的墙）。
+- **局限**：阿克曼不能原地转，要在门前约 4 m 接手；4D4T 离墙太近又很斜的起点仍会蹭墙；门前接近区内不能有其他
+  障碍物；目前只有仿真结果。
 
 ## 致谢
 
