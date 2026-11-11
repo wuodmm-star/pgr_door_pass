@@ -1,5 +1,7 @@
 pgr_door_pass
 Copyright 2026 AGUDAMU (阿古達目), System Control Engineering Laboratory, Muroran Institute of Technology
 
-The Path-Generating Regulator (PGR, 経路生成形レギュレータ) was proposed by Akihiko Takashima (Trans. JSME C,
-70(689), 120-126, 2004) and developed by the group of Prof. Naohiko Hanajima, Muroran Institute of Technology.
+The Path-Generating Regulator (PGR, 経路生成形レギュレータ) was proposed by A. Takashima et al. (Trans. JSME C,
+70(689), 120-126, 2004), extended to four-wheel vehicles by Y. Taruumi, N. Hanajima, J. Dai and A. Takashima
+(Trans. JSME C, 79(801), 1693-1708, 2013) and developed further by the System Control Engineering Laboratory
+(Prof. Naohiko Hanajima), Muroran Institute of Technology.

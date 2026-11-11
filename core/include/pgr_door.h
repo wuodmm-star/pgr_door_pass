@@ -1,5 +1,6 @@
 /*
- * pgr_door - narrow-door passing for differential-drive robots (powered wheelchairs, AMRs), C99, libm only.
+ * pgr_door - one-go narrow-door passing for wheeled robots (powered wheelchairs, AMRs), C99, libm only.
+ * Chassis: differential drive, Ackermann (front steering), 4D4T (four-wheel drive, four-wheel independent steering).
  *
  * Controller: PGR (Path-Generating Regulator, 経路生成形レギュレータ; A. Takashima 2004, developed by the Hanajima
  *             Laboratory, Muroran Institute of Technology) wells in the DOOR frame.
@@ -15,7 +16,7 @@
  * frame, so the controller works on the robot pose RELATIVE TO THE DOOR (cm-level), not on the map pose.
  *
  * Frames: door frame = origin at the door centre on the wall mid-plane, x through the door (robot comes from x < 0),
- * y along the wall. Poses are (x, y, theta) of the rotation centre (drive axle).
+ * y along the wall. Poses are (x, y, theta) of the reference point (see pgrd_ctrl_step_body).
  *
  * License: Apache-2.0
  */
@@ -47,9 +48,16 @@ typedef struct {
     double exit_dist;       /* exit well beyond the wall (m) */
     double goal_tol;        /* done when the axle is this close to the exit well */
     double dt;              /* control period (s), used for the flow feed-forward */
+    int chassis;            /* PGRD_DIFF, PGRD_ACKERMANN, PGRD_4WS */
+    double r_min;           /* Ackermann: smallest turning radius (m) */
+    double beta_max;        /* 4WS: largest crab angle between heading and direction of motion (rad) */
 } pgrd_params;
 
-void pgrd_default_params(pgrd_params *p);   /* wheelchair: x in [-0.25, 0.80], hw 0.33, wall 0.12 */
+enum { PGRD_DIFF = 0, PGRD_ACKERMANN = 1, PGRD_4WS = 2 };
+
+void pgrd_default_params(pgrd_params *p);   /* wheelchair: x in [-0.25, 0.80], hw 0.33, wall 0.12, differential */
+/* defaults for a chassis type (n = 2 for Ackermann: lower peak curvature of the streamlines) */
+void pgrd_default_params_for(pgrd_params *p, int chassis);
 double pgrd_derived_pre(const pgrd_params *p);
 
 typedef struct {
@@ -61,7 +69,13 @@ typedef struct {
 enum { PGRD_APPROACH = 0, PGRD_EXIT = 1, PGRD_DONE = 2 };
 
 void pgrd_ctrl_init(pgrd_ctrl *c, const pgrd_params *p);
-/* pose: rotation centre in the door frame; v_meas: measured forward speed. Returns the stage. */
+/* pose: reference point in the door frame (drive axle for differential / Ackermann, body centre for 4WS);
+ * v_meas: measured speed. Body-frame command (vx, vy, wz); vy != 0 only for 4WS (crab). Returns the stage.
+ *   differential: heading follows the flow;  Ackermann: same, |wz| <= v / r_min;
+ *   4WS: the DIRECTION OF MOTION follows the flow (crab angle <= beta_max) while the heading is turned to the door
+ *        normal, so lateral offsets are removed by translating, not by swinging the body. */
+int pgrd_ctrl_step_body(pgrd_ctrl *c, pgrd_pose pose, double v_meas, double *vx, double *vy, double *wz);
+/* differential-drive form: (v, w) */
 int pgrd_ctrl_step(pgrd_ctrl *c, pgrd_pose pose, double v_meas, double *v_cmd, double *w_cmd);
 /* flow heading of phi_n for the well at (x, y) */
 double pgrd_flow_heading(double x, double y, pgrd_pose well, double n);

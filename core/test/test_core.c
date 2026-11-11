@@ -58,6 +58,59 @@ static void test_law(void) {
     }
 }
 
+/* kinematic closed loop for one chassis; counts yaw-rate reversals before the door ("pose re-adjustments") */
+static void run_chassis(int chassis, const char *name, double W, const double (*starts)[3], int ns, int expect_all) {
+    pgrd_params p;
+    pgrd_default_params_for(&p, chassis);
+    const double dt = 0.02, L = 0.5, dmax = 0.6109;
+    int ok_all = 1;
+    for (int s = 0; s < ns; s++) {
+        pgrd_ctrl c;
+        pgrd_ctrl_init(&c, &p);
+        pgrd_pose q = {starts[s][0], starts[s][1], starts[s][2]};
+        double vx = 0, vy = 0, w = 0, cx = 0, cy = 0, cw = 0, delta = 0, last_sign = 0;
+        int st = 0, hit = 0, k = 0, reversals = 0, stops = 0, back = 0;
+        for (; k < 4000 && st != PGRD_DONE; k++) {
+            if (k % 5 == 0) st = pgrd_ctrl_step_body(&c, q, hypot(vx, vy), &cx, &cy, &cw);
+            vx += fmax(-0.8 * dt, fmin(0.8 * dt, cx - vx));
+            vy += fmax(-0.8 * dt, fmin(0.8 * dt, cy - vy));
+            if (chassis == PGRD_ACKERMANN) {              /* steering angle with a rate limit, yaw from the bicycle model */
+                double dt_goal = fabs(vx) > 0.02 ? atan(L * cw / vx) : delta;
+                dt_goal = fmax(-dmax, fmin(dmax, dt_goal));
+                delta += fmax(-1.5 * dt, fmin(1.5 * dt, dt_goal - delta));
+                w = vx * tan(delta) / L;
+            } else {
+                w += fmax(-1.5 * dt, fmin(1.5 * dt, cw - w));
+            }
+            q.x += (vx * cos(q.th) - vy * sin(q.th)) * dt;
+            q.y += (vx * sin(q.th) + vy * cos(q.th)) * dt;
+            q.th = pgrd_wrap(q.th + w * dt);
+            hit |= touches(&p, q, W);
+            if (q.x + p.xmax < 0.0) {                     /* before the front reaches the wall */
+                double sg = fabs(w) > 0.05 ? (w > 0 ? 1 : -1) : 0;
+                if (sg != 0 && last_sign != 0 && sg != last_sign) reversals++;
+                if (sg != 0) last_sign = sg;
+                if (k > 100 && hypot(vx, vy) < 0.02) stops++;
+                if (vx < -0.02) back++;
+            }
+        }
+        int one_go = st == PGRD_DONE && !hit && stops == 0 && back == 0;
+        ok_all &= one_go;
+        printf("%-10s door %.2f start (%5.2f,%5.2f,%5.2f): %s in %4.1f s, yaw-rate reversals before the door: %d%s\n", name, W,
+               starts[s][0], starts[s][1], starts[s][2], one_go ? "one go" : "FAILED", k * dt, reversals, hit ? " (HIT)" : "");
+    }
+    if (expect_all) CHECK(ok_all, "%s: not all starts passed in one go", name);
+}
+
+static void test_chassis(void) {
+    const double st_diff[][3] = {{-3.5, 0.0, 0.0}, {-3.2, 1.2, -0.6}, {-3.6, -1.4, 0.8}, {-3.0, 1.0, 0.0}};
+    const double st_ack[][3] = {{-4.5, 0.0, 0.0}, {-4.5, 1.0, -0.3}, {-4.8, -1.2, 0.4}, {-4.2, 0.6, 0.0}};
+    const double st_4ws[][3] = {{-3.5, 0.0, 0.0}, {-3.2, 1.2, -0.6}, {-3.6, -1.4, 0.8}, {-3.0, 1.0, 0.0}};
+    run_chassis(PGRD_DIFF, "diff", 0.80, st_diff, 4, 1);
+    run_chassis(PGRD_ACKERMANN, "ackermann", 0.80, st_ack, 4, 1);
+    run_chassis(PGRD_4WS, "4ws", 0.80, st_4ws, 4, 1);
+}
+
 static void test_detect(void) {
     pgrd_detect_params dp;
     pgrd_detect_default(&dp);
@@ -93,6 +146,7 @@ static void test_detect(void) {
 
 int main(void) {
     test_law();
+    test_chassis();
     test_detect();
     printf(fails ? "%d FAILURE(S)\n" : "all tests passed\n", fails);
     return fails ? 1 : 0;

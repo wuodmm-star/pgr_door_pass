@@ -1,0 +1,36 @@
+# Powered wheelchair with active front steering (car-like): rear axle reference, wheelbase 0.5 m, R_min ~0.87 m.
+door_pass:
+  ros__parameters:
+    base_frame: base_link
+    odom_frame: odom
+    map_frame: map
+    scan_topic: scan
+    odom_topic: odom
+    cmd_vel_topic: cmd_vel
+    rate: 10.0
+    autostart: false
+    use_detection: true
+    chassis: ackermann
+    ackermann.min_turning_radius: 1.0
+    ackermann.wheelbase: 0.5
+    ackermann.output_steering_angle: false
+    # door in the map frame (centre of the opening on the wall mid-plane; yaw = wall normal, either side)
+    door.x: 0.0
+    door.y: 0.0
+    door.yaw: 0.0
+    door.wall_thickness: 0.12
+    # footprint about the rotation centre (drive axle)
+    footprint.xmin: -0.25
+    footprint.xmax: 0.80
+    footprint.half_width: 0.33
+    # PGR law (n = 2: lower peak curvature; pgr.pre <= 0: derived from the footprint and R_min)
+    pgr.n: 2.0
+    pgr.k: 2.0
+    pgr.pre: 0.0
+    v_far: 0.6
+    v_near: 0.3
+    w_max: 1.0
+    exit_distance: 2.0
+    goal_tolerance: 0.4
+    detect.min_width: 0.55
+    detect.max_width: 1.3

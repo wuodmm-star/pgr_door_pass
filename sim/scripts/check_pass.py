@@ -8,7 +8,10 @@ from rclpy.node import Node
 
 W = float(sys.argv[1]) if len(sys.argv) > 1 else 0.80
 T = float(sys.argv[2]) if len(sys.argv) > 2 else 60.0
-XMIN, XMAX, HW, WALL = -0.25, 0.80, 0.33, 0.12
+CHASSIS = sys.argv[3] if len(sys.argv) > 3 else 'diff'
+# ground truth is the drive axle for diff, the body centre for ackermann (SDF chassis) and 4ws
+XMIN, XMAX = (-0.25, 0.80) if CHASSIS == 'diff' else (-0.525, 0.525)
+HW, WALL = 0.33, 0.12
 
 
 def clearance(x, y, th):
@@ -28,6 +31,7 @@ class Check(Node):
     def __init__(self):
         super().__init__('check_pass')
         self.min_clear, self.passed, self.stops, self.spins, self.t0 = 9.0, False, 0, 0, None
+        self.backs, self.flips, self.last_sign = 0, 0, 0
         self.create_subscription(Odometry, '/ground_truth', self.cb, 50)
 
     def cb(self, m):
@@ -39,8 +43,16 @@ class Check(Node):
         if p.x + XMAX > -0.5 and p.x + XMIN < WALL / 2 + 0.2:
             self.min_clear = min(self.min_clear, clearance(p.x, p.y, th))
         if not self.passed and t - self.t0 > 10.0:
-            self.stops += abs(v) < 0.02 and abs(tw.angular.z) < 0.1
-            self.spins += abs(v) < 0.05 and abs(tw.angular.z) > 0.2
+            sp = math.hypot(tw.linear.x, tw.linear.y)
+            self.stops += sp < 0.02 and abs(tw.angular.z) < 0.1
+            self.spins += sp < 0.05 and abs(tw.angular.z) > 0.2
+            self.backs += v < -0.05
+            if p.x + XMAX < 0.0:                        # yaw-rate reversals before the front reaches the wall
+                sg = (1 if tw.angular.z > 0 else -1) if abs(tw.angular.z) > 0.08 else 0
+                if sg and self.last_sign and sg != self.last_sign:
+                    self.flips += 1
+                if sg:
+                    self.last_sign = sg
         if p.x + XMIN * math.cos(th) - HW * abs(math.sin(th)) > WALL / 2:
             self.passed = True
         self.t = t
@@ -51,5 +63,5 @@ n = Check()
 t_wall = time.time()
 while rclpy.ok() and time.time() - t_wall < T and not n.passed:
     rclpy.spin_once(n, timeout_sec=0.1)
-print(f'door {W:.2f} m: passed={n.passed} min_clearance={n.min_clear * 100:.1f} cm '
-      f'stop_samples={n.stops} spin_samples={n.spins}', flush=True)
+print(f'{CHASSIS} door {W:.2f} m: passed={n.passed} min_clearance={n.min_clear * 100:.1f} cm '
+      f'stop_samples={n.stops} spin_samples={n.spins} reverse_samples={n.backs} yaw_reversals={n.flips}', flush=True)

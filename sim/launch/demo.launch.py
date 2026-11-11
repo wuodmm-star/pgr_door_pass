@@ -1,12 +1,17 @@
-"""Gazebo demo: a powered wheelchair with free front casters passes a narrow door with door_pass_node.
+"""Gazebo demo: a base passes a narrow door with door_pass_node.
 
-ros2 launch pgr_door_pass demo.launch.py door_width:=0.75 x:=-3.2 y:=1.2 yaw:=-0.6 gui:=true
+chassis:=diff       powered wheelchair, rear-wheel drive, free front casters (physical swivel joints)
+chassis:=ackermann  powered wheelchair with active front steering (gazebo_ros_ackermann_drive)
+chassis:=4ws        4D4T base: four driven, independently steered wheels (libpgr_door_4ws_drive.so)
+
+ros2 launch pgr_door_pass demo.launch.py chassis:=4ws door_width:=0.75 x:=-3.2 y:=1.2 yaw:=-0.6 gui:=true
+x, y, yaw: start of the reference point (drive axle for diff / ackermann, body centre for 4ws).
 The room is x in [-5, 0], the wall (0.12 m) at x = 0 with the door centred at y = 0; the robot drives through.
 Localization in the demo is the wheel odometry (map = odom); the door pose comes from the 2D lidar."""
 import os
 import tempfile
 
-from ament_index_python.packages import get_package_share_directory
+from ament_index_python.packages import get_package_prefix, get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction, TimerAction
 from launch.substitutions import LaunchConfiguration
@@ -42,31 +47,54 @@ def setup(context):
     fd, world = tempfile.mkstemp(suffix='.world')
     with os.fdopen(fd, 'w') as f:
         f.write(world_sdf(w, pacer))
-    urdf = os.path.join(share, 'sim', 'urdf', 'wheelchair.urdf')
+    chassis = LaunchConfiguration('chassis').perform(context)
+    x, y, yaw = (float(LaunchConfiguration(k).perform(context)) for k in ('x', 'y', 'yaw'))
     sim_time = {'use_sim_time': True}
+    static = []                                       # extra static TFs per chassis
+    if chassis == 'ackermann':                        # SDF model origin = rear axle; odom -> rear_axle from the plugin
+        model = os.path.join(share, 'sim', 'urdf', 'wheelchair_steer.sdf')
+        z = 0.06
+        static = [('0.70', '0.42', 'rear_axle', 'laser')]  # lidar 0.425 m ahead of the body centre (0.275 + 0.425)
+        cfg, extra = 'ackermann.yaml', {'base_frame': 'rear_axle', 'ackermann.output_steering_angle': True}
+    elif chassis == '4ws':
+        with open(os.path.join(share, 'sim', 'urdf', 'base_4ws.urdf')) as f:
+            txt = f.read().replace('@FOUR_WS_PLUGIN@', os.path.join(get_package_prefix('pgr_door_pass'), 'lib',
+                                                                     'libpgr_door_4ws_drive.so'))
+        fd, model = tempfile.mkstemp(suffix='.urdf')
+        with os.fdopen(fd, 'w') as f:
+            f.write(txt)
+        z = 0.005
+        static = [('0.425', '0.47', 'base_link', 'laser')]
+        cfg, extra = '4ws.yaml', {}
+    else:
+        model = os.path.join(share, 'sim', 'urdf', 'wheelchair.urdf')
+        z = 0.005
+        static = [('0.70', '0.42', 'base_link', 'laser')]
+        cfg, extra = 'wheelchair.yaml', {}
     acts = [ExecuteProcess(cmd=['gzserver', '-s', 'libgazebo_ros_init.so', '-s', 'libgazebo_ros_factory.so', world],
                            output='screen')]
     if gui:
         acts.append(ExecuteProcess(cmd=['gzclient'], output='screen'))
     acts += [
         Node(package='gazebo_ros', executable='spawn_entity.py', output='screen',
-             arguments=['-entity', 'wheelchair', '-file', urdf, '-timeout', '120',
-                        '-x', LaunchConfiguration('x').perform(context),
-                        '-y', LaunchConfiguration('y').perform(context), '-z', '0.005',
-                        '-Y', LaunchConfiguration('yaw').perform(context)]),
+             arguments=['-entity', 'wheelchair', '-file', model, '-timeout', '120',
+                        '-x', str(x), '-y', str(y), '-z', str(z), '-Y', str(yaw)]),
         Node(package='tf2_ros', executable='static_transform_publisher', output='screen', parameters=[sim_time],
              arguments=['--frame-id', 'map', '--child-frame-id', 'odom']),
-        Node(package='tf2_ros', executable='static_transform_publisher', output='screen', parameters=[sim_time],
-             arguments=['--x', '0.70', '--z', '0.42', '--frame-id', 'base_link', '--child-frame-id', 'laser']),
-        TimerAction(period=8.0, actions=[Node(
-            package='pgr_door_pass', executable='door_pass_node', name='door_pass', output='screen',
-            parameters=[os.path.join(share, 'config', 'wheelchair.yaml'), sim_time, {'autostart': True}])]),
     ]
+    for (sx, sz, parent, child) in static:
+        acts.append(Node(package='tf2_ros', executable='static_transform_publisher', output='screen',
+                         parameters=[sim_time], arguments=['--x', sx, '--z', sz, '--frame-id', parent,
+                                                           '--child-frame-id', child]))
+    acts.append(TimerAction(period=8.0, actions=[Node(
+        package='pgr_door_pass', executable='door_pass_node', name='door_pass', output='screen',
+        parameters=[os.path.join(share, 'config', cfg), sim_time, dict({'autostart': True}, **extra)])]))
     return acts
 
 
 def generate_launch_description():
     return LaunchDescription([
+        DeclareLaunchArgument('chassis', default_value='diff', description='diff | ackermann | 4ws'),
         DeclareLaunchArgument('door_width', default_value='0.80'),
         DeclareLaunchArgument('x', default_value='-3.2'),
         DeclareLaunchArgument('y', default_value='1.0'),

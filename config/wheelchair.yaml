@@ -10,6 +10,7 @@ door_pass:
     rate: 10.0
     autostart: false
     use_detection: true
+    chassis: diff
     # door in the map frame (centre of the opening on the wall mid-plane; yaw = wall normal, either side)
     door.x: 0.0
     door.y: 0.0

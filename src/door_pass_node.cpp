@@ -1,6 +1,7 @@
 // door_pass_node: ROS 2 front-end of pgr_door (C core). Takes a differential-drive robot through a narrow door
 // in one go: the door is located in the 2D scan and tracked in the odometry frame, the PGR law runs on the robot
 // pose relative to the door and publishes cmd_vel. License: Apache-2.0
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <memory>
@@ -61,7 +62,13 @@ class DoorPassNode : public rclcpp::Node {
     autostart_ = declare_parameter("autostart", false);
     double rate = declare_parameter("rate", 10.0);
 
-    pgrd_default_params(&p_);
+    const std::string chassis = declare_parameter("chassis", "diff");     // diff | ackermann | 4ws
+    const int ch = chassis == "ackermann" ? PGRD_ACKERMANN : (chassis == "4ws" ? PGRD_4WS : PGRD_DIFF);
+    pgrd_default_params_for(&p_, ch);
+    p_.r_min = declare_parameter("ackermann.min_turning_radius", p_.r_min);
+    p_.beta_max = declare_parameter("4ws.max_crab_angle", p_.beta_max);
+    steer_out_ = declare_parameter("ackermann.output_steering_angle", false);   // angular.z = front steering angle
+    wheelbase_ = declare_parameter("ackermann.wheelbase", 0.5);
     p_.xmin = declare_parameter("footprint.xmin", p_.xmin);
     p_.xmax = declare_parameter("footprint.xmax", p_.xmax);
     p_.hw = declare_parameter("footprint.half_width", p_.hw);
@@ -90,7 +97,9 @@ class DoorPassNode : public rclcpp::Node {
         [this](sensor_msgs::msg::LaserScan::SharedPtr m) { on_scan(m); });
     odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(
         declare_parameter("odom_topic", "odom"), 10,
-        [this](nav_msgs::msg::Odometry::SharedPtr m) { v_meas_ = m->twist.twist.linear.x; });
+        [this](nav_msgs::msg::Odometry::SharedPtr m) {
+          v_meas_ = std::hypot(m->twist.twist.linear.x, m->twist.twist.linear.y);
+        });
     door_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
         "~/door", 10, [this](geometry_msgs::msg::PoseStamped::SharedPtr m) {   // set the door (map frame) and go
           door_map_ = make_pose(m->pose.position.x, m->pose.position.y, yaw_of(m->pose.orientation));
@@ -109,8 +118,8 @@ class DoorPassNode : public rclcpp::Node {
         });
     timer_ = create_wall_timer(std::chrono::duration<double>(1.0 / rate), [this] { step(); });
     if (autostart_) start();
-    RCLCPP_INFO(get_logger(), "door_pass ready: pre-door well %.2f m (%s)", p_.pre > 0 ? p_.pre : pgrd_derived_pre(&p_),
-                p_.pre > 0 ? "set" : "derived from the footprint");
+    RCLCPP_INFO(get_logger(), "door_pass ready: chassis %s, PGR n %.1f, pre-door well %.2f m (%s)", chassis.c_str(), p_.n,
+                p_.pre > 0 ? p_.pre : pgrd_derived_pre(&p_), p_.pre > 0 ? "set" : "derived from the footprint");
   }
 
  private:
@@ -179,11 +188,14 @@ class DoorPassNode : public rclcpp::Node {
       }
     }
     const pgrd_pose rel = pgrd_compose(pgrd_inverse(door_odom), robot_odom);
-    double v, w;
-    const int st = pgrd_ctrl_step(&ctrl_, rel, v_meas_, &v, &w);
+    double vx, vy, wz;
+    const int st = pgrd_ctrl_step_body(&ctrl_, rel, v_meas_, &vx, &vy, &wz);
     geometry_msgs::msg::Twist cmd;
-    cmd.linear.x = v;
-    cmd.angular.z = w;
+    cmd.linear.x = vx;
+    cmd.linear.y = vy;
+    cmd.angular.z = wz;
+    if (steer_out_ && p_.chassis == PGRD_ACKERMANN)                // bases that take the front steering angle
+      cmd.angular.z = std::atan(wheelbase_ * wz / std::max(std::fabs(vx), 0.05));
     cmd_pub_->publish(cmd);
     door_pub_->publish(to_msg(door_odom, odom_frame_, now()));
     std_msgs::msg::String s;
@@ -198,7 +210,8 @@ class DoorPassNode : public rclcpp::Node {
 
   std::string base_frame_, odom_frame_, map_frame_;
   pgrd_pose door_map_{}, sensor_{};
-  bool use_detection_{true}, autostart_{false}, active_{false}, oriented_{false};
+  bool use_detection_{true}, autostart_{false}, active_{false}, oriented_{false}, steer_out_{false};
+  double wheelbase_{0.5};
   pgrd_params p_{};
   pgrd_detect_params dp_{};
   pgrd_ctrl ctrl_{};

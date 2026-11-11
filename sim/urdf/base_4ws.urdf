@@ -1,0 +1,110 @@
+<?xml version="1.0"?>
+<!-- 4D4T base (four driven, independently steered wheels), same 1.05 m x 0.66 m footprint as the wheelchairs.
+     base_link = body centre (reference point of the 4WS law); modules at (+-0.35, +-0.21), wheel radius 0.12 m.
+     Driven by libpgr_door_4ws_drive.so (cmd_vel: linear.x, linear.y, angular.z). -->
+<robot name="base_4ws">
+  <link name="base_link">
+    <inertial><origin xyz="0 0 0.40"/><mass value="100"/><inertia ixx="8.0" ixy="0" ixz="0" iyy="11.0" iyz="0" izz="12.0"/></inertial>
+    <collision name="body"><origin xyz="0 0 0.30"/><geometry><box size="1.05 0.66 0.25"/></geometry></collision>
+    <visual name="body_v"><origin xyz="0 0 0.30"/><geometry><box size="1.05 0.66 0.25"/></geometry></visual>
+  </link>
+  <link name="steer_fl">
+    <inertial><mass value="1.0"/><inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/></inertial>
+  </link>
+  <joint name="steer_fl_joint" type="revolute">
+    <parent link="base_link"/><child link="steer_fl"/><origin xyz="0.35 0.21 0.12"/><axis xyz="0 0 1"/>
+    <limit lower="-1.65" upper="1.65" effort="60" velocity="3.0"/><dynamics damping="0.5"/>
+  </joint>
+  <link name="wheel_fl">
+    <inertial><mass value="2.0"/><inertia ixx="0.008" ixy="0" ixz="0" iyy="0.0144" iyz="0" izz="0.008"/></inertial>
+    <collision><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.12" length="0.05"/></geometry></collision>
+    <visual><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.12" length="0.05"/></geometry></visual>
+  </link>
+  <joint name="wheel_fl_joint" type="continuous">
+    <parent link="steer_fl"/><child link="wheel_fl"/><origin xyz="0 0 0"/><axis xyz="0 1 0"/>
+  </joint>
+  <gazebo reference="wheel_fl"><mu1>1.0</mu1><mu2>1.0</mu2><kp>1e6</kp><kd>100</kd></gazebo>
+  <link name="steer_fr">
+    <inertial><mass value="1.0"/><inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/></inertial>
+  </link>
+  <joint name="steer_fr_joint" type="revolute">
+    <parent link="base_link"/><child link="steer_fr"/><origin xyz="0.35 -0.21 0.12"/><axis xyz="0 0 1"/>
+    <limit lower="-1.65" upper="1.65" effort="60" velocity="3.0"/><dynamics damping="0.5"/>
+  </joint>
+  <link name="wheel_fr">
+    <inertial><mass value="2.0"/><inertia ixx="0.008" ixy="0" ixz="0" iyy="0.0144" iyz="0" izz="0.008"/></inertial>
+    <collision><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.12" length="0.05"/></geometry></collision>
+    <visual><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.12" length="0.05"/></geometry></visual>
+  </link>
+  <joint name="wheel_fr_joint" type="continuous">
+    <parent link="steer_fr"/><child link="wheel_fr"/><origin xyz="0 0 0"/><axis xyz="0 1 0"/>
+  </joint>
+  <gazebo reference="wheel_fr"><mu1>1.0</mu1><mu2>1.0</mu2><kp>1e6</kp><kd>100</kd></gazebo>
+  <link name="steer_rl">
+    <inertial><mass value="1.0"/><inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/></inertial>
+  </link>
+  <joint name="steer_rl_joint" type="revolute">
+    <parent link="base_link"/><child link="steer_rl"/><origin xyz="-0.35 0.21 0.12"/><axis xyz="0 0 1"/>
+    <limit lower="-1.65" upper="1.65" effort="60" velocity="3.0"/><dynamics damping="0.5"/>
+  </joint>
+  <link name="wheel_rl">
+    <inertial><mass value="2.0"/><inertia ixx="0.008" ixy="0" ixz="0" iyy="0.0144" iyz="0" izz="0.008"/></inertial>
+    <collision><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.12" length="0.05"/></geometry></collision>
+    <visual><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.12" length="0.05"/></geometry></visual>
+  </link>
+  <joint name="wheel_rl_joint" type="continuous">
+    <parent link="steer_rl"/><child link="wheel_rl"/><origin xyz="0 0 0"/><axis xyz="0 1 0"/>
+  </joint>
+  <gazebo reference="wheel_rl"><mu1>1.0</mu1><mu2>1.0</mu2><kp>1e6</kp><kd>100</kd></gazebo>
+  <link name="steer_rr">
+    <inertial><mass value="1.0"/><inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/></inertial>
+  </link>
+  <joint name="steer_rr_joint" type="revolute">
+    <parent link="base_link"/><child link="steer_rr"/><origin xyz="-0.35 -0.21 0.12"/><axis xyz="0 0 1"/>
+    <limit lower="-1.65" upper="1.65" effort="60" velocity="3.0"/><dynamics damping="0.5"/>
+  </joint>
+  <link name="wheel_rr">
+    <inertial><mass value="2.0"/><inertia ixx="0.008" ixy="0" ixz="0" iyy="0.0144" iyz="0" izz="0.008"/></inertial>
+    <collision><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.12" length="0.05"/></geometry></collision>
+    <visual><origin rpy="1.5708 0 0"/><geometry><cylinder radius="0.12" length="0.05"/></geometry></visual>
+  </link>
+  <joint name="wheel_rr_joint" type="continuous">
+    <parent link="steer_rr"/><child link="wheel_rr"/><origin xyz="0 0 0"/><axis xyz="0 1 0"/>
+  </joint>
+  <gazebo reference="wheel_rr"><mu1>1.0</mu1><mu2>1.0</mu2><kp>1e6</kp><kd>100</kd></gazebo>
+
+  <link name="laser"><inertial><mass value="0.2"/><inertia ixx="1e-4" ixy="0" ixz="0" iyy="1e-4" iyz="0" izz="1e-4"/></inertial></link>
+  <joint name="laser_joint" type="fixed"><parent link="base_link"/><child link="laser"/><origin xyz="0.425 0 0.47"/></joint>
+  <gazebo reference="base_link"><mu1>0.3</mu1><mu2>0.3</mu2></gazebo>
+  <gazebo>
+    <plugin name="four_ws_drive" filename="@FOUR_WS_PLUGIN@">
+      <steer_fl>steer_fl_joint</steer_fl><steer_fr>steer_fr_joint</steer_fr>
+      <steer_rl>steer_rl_joint</steer_rl><steer_rr>steer_rr_joint</steer_rr>
+      <wheel_fl>wheel_fl_joint</wheel_fl><wheel_fr>wheel_fr_joint</wheel_fr>
+      <wheel_rl>wheel_rl_joint</wheel_rl><wheel_rr>wheel_rr_joint</wheel_rr>
+      <wheel_radius>0.12</wheel_radius>
+      <base_link>base_link</base_link>
+      <odom_frame>odom</odom_frame>
+      <base_frame>base_link</base_frame>
+    </plugin>
+    <plugin name="truth" filename="libgazebo_ros_p3d.so">
+      <ros><remapping>odom:=ground_truth</remapping></ros>
+      <body_name>base_link</body_name><frame_name>world</frame_name><update_rate>50</update_rate>
+    </plugin>
+  </gazebo>
+  <gazebo reference="laser">
+    <sensor name="lidar" type="ray">
+      <always_on>true</always_on><update_rate>10</update_rate>
+      <ray>
+        <scan><horizontal><samples>541</samples><resolution>1</resolution><min_angle>-2.3561945</min_angle><max_angle>2.3561945</max_angle></horizontal></scan>
+        <range><min>0.05</min><max>8.0</max><resolution>0.01</resolution></range>
+        <noise><type>gaussian</type><mean>0.0</mean><stddev>0.02</stddev></noise>
+      </ray>
+      <plugin name="scan" filename="libgazebo_ros_ray_sensor.so">
+        <ros><remapping>~/out:=scan</remapping></ros>
+        <output_type>sensor_msgs/LaserScan</output_type>
+        <frame_name>laser</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+</robot>

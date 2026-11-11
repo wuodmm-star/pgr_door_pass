@@ -36,6 +36,15 @@ if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/sim)
   install(DIRECTORY sim DESTINATION share/${PROJECT_NAME})
 endif()
 
+# optional: Gazebo-classic drive plugin for the 4D4T demo base
+find_package(gazebo_dev QUIET)
+find_package(gazebo_ros QUIET)
+if(gazebo_dev_FOUND AND gazebo_ros_FOUND)
+  add_library(pgr_door_4ws_drive SHARED sim/plugins/four_ws_drive.cc)
+  ament_target_dependencies(pgr_door_4ws_drive gazebo_dev gazebo_ros rclcpp geometry_msgs nav_msgs tf2_ros)
+  install(TARGETS pgr_door_4ws_drive LIBRARY DESTINATION lib)
+endif()
+
 if(BUILD_TESTING)
   add_executable(test_pgr_door core/test/test_core.c)
   target_link_libraries(test_pgr_door pgr_door_core)

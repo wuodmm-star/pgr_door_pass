@@ -1,6 +1,7 @@
 # pgr_door_pass
 
-**One-go narrow-door passing for differential-drive robots (powered wheelchairs, AMRs).**
+**One-go narrow-door passing for wheeled robots (powered wheelchairs, AMRs): differential drive, Ackermann (front
+steering) and 4D4T (four-wheel drive, four-wheel independent steering).**
 ROS 2 (Humble) node + a dependency-free C99 core (`core/`, libm only).
 
 [中文说明](#中文说明)
@@ -24,6 +25,14 @@ to the well heading. The robot heading follows the flow:
 1. **Approach well** in front of the door at `pre = x_front + wall/2 + 5·v_near/k` (front extent + half the wall +
    heading settling distance; 1.61 m for the wheelchair), so the whole body is aligned before its front reaches the wall.
 2. **Exit well** beyond the door; slow speed `v_near` near the door.
+
+### Chassis
+
+| chassis | reference point | how the PGR flow is used | command |
+|---|---|---|---|
+| differential (`config/wheelchair.yaml`) | drive axle | heading follows the flow (above), `n = 3` | `cmd_vel` (v, ω) |
+| Ackermann (`config/ackermann.yaml`) | rear axle | same law with the curvature bound `|ω| ≤ v / R_min`; `n = 2` (lower peak curvature of the streamlines); the approach well is moved out so that the car can straighten with a bounded curvature: `pre = x_front + wall/2 + max(5·v_near/k, 2·sqrt(0.2·R_min))` (1.75 m for R_min = 1 m) | (v, ω), or `angular.z` = front steering angle `atan(L·ω/v)` with `ackermann.output_steering_angle: true` |
+| 4D4T (`config/4ws.yaml`) | body centre | the **direction of motion** follows the flow (crab angle ≤ `4ws.max_crab_angle`) while the heading is turned to the door normal, so lateral offsets are removed by translating, not by swinging the body | (vx, vy, ω) |
 
 It is pure state feedback: when the robot is pushed off (caster swing, wheel slip, a jump of the door estimate) it
 is pulled back towards a streamline from wherever it is — no re-planning, no optimisation.
@@ -50,6 +59,25 @@ turning on the spot and no stop.
 | TEB ³ | 8 % | 0 % | 0 % | – | 3 % | 8 | 52 | 166 ms ² |
 
 Paired exact McNemar test on the same 200 episodes: pgr_door_pass vs DWB 112 : 0 wins, p ≈ 4·10⁻³⁴.
+
+### Decisive: no hesitation, no re-adjusting in front of the door
+
+The robot commits to the door from 2–4 m away and drives through in one continuous motion: it never stops to
+re-plan, never turns on the spot to square up and never backs out to try again. Same 200 episodes per controller,
+counted before the robot is through the door:
+
+| controller | stop ≥ 0.5 s | turn on the spot | reversing | any of these | gave up |
+|---|---|---|---|---|---|
+| **pgr_door_pass** | **0.5 %** | **0 %** | **0 %** | **0.5 %** | **0 %** |
+| Nav2 DWB | 2.0 % | 11 % | 2.5 % | 14.5 % | 0 % |
+| Nav2 RotationShim + RPP | 4.5 % | 27 % | 0.5 % | 32 % | 70 % |
+| Vector Pursuit | 5.5 % | 48 % | 4.0 % | 53.5 % | 90 % |
+| Nav2 Graceful | 17 % | 33.5 % | 0.5 % | 45.5 % | 69.5 % |
+| TEB | 55 % | 85 % | 90 % | 96 % | 38 % |
+
+Why: the PGR flow is defined everywhere, so there is always one forward heading to follow — no search that can come
+back empty, no local minimum in front of the jambs, nothing to oscillate between. The approach well is placed
+exactly far enough out (`pre`) for the body to be straight before its front reaches the wall.
 
 ¹ the control law alone, per 10 Hz cycle. ² CPU time of the whole `controller_server` process per 10 Hz cycle
 (includes the local costmap), so the two columns are not the same measurement. ³ 137 of 200 episodes (the 0.72 m
@@ -86,7 +114,7 @@ ros2 topic pub --once /door_pass/door geometry_msgs/msg/PoseStamped "{header: {f
 | subscribes | `scan` (LaserScan), `odom` (Odometry, for the measured speed), TF `odom→base_link`, `map→odom` |
 | publishes | `cmd_vel`, `~/state` (approach / crossing / done), `~/door_pose` (door in the odom frame) |
 | services | `~/start`, `~/stop` (std_srvs/Trigger); topic `~/door` sets the door (map frame) and starts |
-| key params | `door.x/y/yaw` (map, either side), `door.wall_thickness`, `footprint.xmin/xmax/half_width` (about the drive axle), `pgr.n` (3), `pgr.k` (2), `pgr.pre` (≤0: derived), `v_far`, `v_near`, `w_max` |
+| key params | `chassis` (`diff` / `ackermann` / `4ws`), `door.x/y/yaw` (map, either side), `door.wall_thickness`, `footprint.xmin/xmax/half_width` (about the drive axle), `pgr.n` (3), `pgr.k` (2), `pgr.pre` (≤0: derived), `v_far`, `v_near`, `w_max` |
 
 The node takes over from the navigation stack for the door manoeuvre: hand over to it ~2–4 m before the door and
 give control back once `~/state` reports `done`.
@@ -94,18 +122,31 @@ give control back once `~/state` reports `done`.
 ### Gazebo demo
 
 ```bash
-ros2 launch pgr_door_pass demo.launch.py door_width:=0.75 x:=-3.2 y:=1.0 yaw:=-0.5
+ros2 launch pgr_door_pass demo.launch.py chassis:=diff door_width:=0.75 x:=-3.2 y:=1.0 yaw:=-0.5
+ros2 launch pgr_door_pass demo.launch.py chassis:=ackermann door_width:=0.80 x:=-4.4 y:=1.0 yaw:=-0.3
+ros2 launch pgr_door_pass demo.launch.py chassis:=4ws door_width:=0.72 x:=-3.6 y:=-1.3 yaw:=0.7
 ```
 
-Checked with this node (not the benchmark harness), 3 oblique starts per door, ground-truth footprint vs. jamb
-corners: 0.90 m 3/3 through (closest 11.4–11.7 cm), 0.80 m 3/3 (6.4–6.6 cm), 0.72 m 3/3 (2.1–2.6 cm; 3 cm is the
-maximum possible), no stop, no turning on the spot. On WSL2 the Gazebo-classic real-time throttle can collapse;
+Checked with this node (not the 200-episode benchmark harness): oblique starts, ground-truth footprint vs. jamb
+corners, 1.05 m × 0.66 m body for all three (so 12 / 7 / 3 cm is the largest possible clearance at 0.90 / 0.80 /
+0.72 m). Through in one go, closest distance to a jamb:
+
+| chassis (Gazebo model) | 0.90 m | 0.80 m | 0.72 m |
+|---|---|---|---|
+| differential, free swivel casters (`gazebo_ros_diff_drive`) | 3/3, 11.4–11.7 cm | 3/3, 6.4–6.6 cm | 6/6, 2.1–2.8 cm |
+| Ackermann, front steering 35°, R_min ≈ 0.87 m (`gazebo_ros_ackermann_drive`), starts 4.2–4.6 m away | 3/3, 10.4–11.4 cm | 3/3, 5.2–5.9 cm | 3/3, 1.3–1.9 cm |
+| 4D4T, four steered driven wheels (`sim/plugins/four_ws_drive.cc`) | 3/3, 10.6–10.8 cm | 3/3, 4.8–6.8 cm | 3/3, 0.7–2.8 cm |
+
+No stop, no turning on the spot, no reversing in any of these runs. One Ackermann run had to be restarted because
+Gazebo (on WSL2) did not place the model at its start pose; the run was repeated and is counted once. On WSL2 the Gazebo-classic real-time throttle can collapse;
 pass `pacer_plugin:=<path to a real-time pacer>` or run on native Linux.
 
 ## Limitations
 
-- Differential drive (rotation centre on the drive axle). A car-like (front-steering) base needs a turning-radius
-  aware approach.
+- The 200-episode benchmark is for the differential-drive wheelchair; the Ackermann and 4D4T bases were checked
+  with 3 starts per door width in the Gazebo demo.
+- Ackermann: the car cannot turn on the spot, so it needs room: the approach well is ~1.75 m in front of the door
+  and the car should take over ~4 m out. Starts closer or more oblique than that are not handled (no reversing).
 - The approach zone in front of the door must be free of other obstacles: the law does not avoid obstacles, it only
   keeps the footprint clear of the door frame.
 - Door detection assumes a straight wall with a gap within ~1.3 m of the predicted door centre.
@@ -113,17 +154,23 @@ pass `pacer_plugin:=<path to a real-time pacer>` or run on native Linux.
 
 ## Credits / 謝辞
 
-- **経路生成形レギュレータ（PGR: Path-Generating Regulator）の考案**：高島 昭彦
-  — 高島昭彦「経路生成形レギュレータによる非ホロノミック車両のフィードバック制御」,
-  日本機械学会論文集 C編, 70巻689号, pp.120–126, 2004.
-- **PGR の発展と研究指導**：花島 直彦 教授（室蘭工業大学）
-  — 例：代 軍「The Extended Path-generating Regulator for Control of Nonholonomic Mobile Robots」, 博士論文, 室蘭工業大学, 2015.
-- **本ソフトウェア（窄門通過器）の開発**：阿古達目（AGUDAMU）（室蘭工業大学）
-- **研究室**：室蘭工業大学 システム制御工学研究室
+**経路生成形レギュレータ（PGR: Path-Generating Regulator）**
 
-PGR was proposed by Akihiko Takashima (2004) and developed by the group of Prof. Naohiko Hanajima at the
-Muroran Institute of Technology; this door-passing controller was developed by AGUDAMU (阿古達目) in the System
-Control Engineering Laboratory, Muroran Institute of Technology.
+- 考案：高島 昭彦 ほか「経路生成形レギュレータによる非ホロノミック車両のフィードバック制御」,
+  日本機械学会論文集 C編, 70巻689号, pp.120–126, 2004.（独立二輪の移動ロボットに対して提案）
+- 四輪車両への拡張：樽海 靖孝, 花島 直彦, 代 軍, 高島 昭彦「経路生成形レギュレータによる四輪車両の走行制御」,
+  日本機械学会論文集 C編, 79巻801号, pp.1693–1708, 2013.
+- その後の発展（室蘭工業大学 システム制御工学研究室）：直線・円弧経路追従（羅 威 ほか, 2015）、障害物回避
+  （大竹 亘 ほか, 日本ロボット学会誌 34(1), 2016）、拡張 PGR（代 軍, 博士論文, 2015）など。
+
+**本ソフトウェア（窄門通過器）**
+
+- 開発：阿古達目（AGUDAMU） — 室蘭工業大学 システム制御工学研究室
+- 指導：花島 直彦 教授 — 室蘭工業大学 システム制御工学研究室
+
+PGR was proposed by A. Takashima et al. (2004) and extended to four-wheel vehicles and developed further by the
+System Control Engineering Laboratory (Prof. Naohiko Hanajima), Muroran Institute of Technology. This door-passing
+controller was developed by AGUDAMU (阿古達目) in the same laboratory under the supervision of Prof. Hanajima.
 
 ## License
 
@@ -133,18 +180,26 @@ Apache-2.0
 
 ## 中文说明
 
-**差速底盘（电动轮椅、AMR）一次通过窄门的控制器**：ROS 2 节点 + 不依赖任何库的 C99 核心。
+**轮式机器人（电动轮椅、AMR）一次通过窄门的控制器**：ROS 2 节点 + 不依赖任何库的 C99 核心。
+支持差速、阿克曼（前轮转向）、4D4T（四驱四转）三种底盘。
 
 - **原理**：在门的坐标系里放两口 PGR（经路生成型调节器，Path-Generating Regulator）势能井。第一口在门前（距离 = 车头长 + 半墙厚 + 摆正距离，轮椅为 1.61 m），
   让整个车身在车头到墙之前摆正；第二口在门后。车头朝向始终跟随势能场的流向，被万向轮带偏、打滑或门位置估计跳动时，
   会从当前位置被自动拉回，不需要重新规划。
 - **门框由 2D 激光实时检测**（拟合墙线、找缺口、确认缺口后面是通的），在里程计坐标系里累积，控制器用的是
   "车相对门"的位置（厘米级），不依赖地图定位精度。
+- **果断、不徘徊、一次通过**：在门前 2–4 m 就锁定这扇门，一口气开过去，不停车重新规划、不原地转调整姿态、不倒车重试。
+  200 局里出现任何犹豫（停顿 ≥0.5 秒、原地转、倒车）的只有 0.5%，放弃 0%；Nav2 各控制器为 14.5–96%，放弃最多 90%。
 - **Gazebo 评测**（万向轮为真实自由关节，4 种门宽 × 50 个起点）：一次通过率 97%（0.72 m 门 96%），
   Nav2 的 DWB 为 41%，RPP、Vector Pursuit、Graceful、TEB 为 2–4%（多数在门前判断"要碰撞"而停下放弃）。
-- **局限**：只适用于差速底盘；门前接近区内不能有其他障碍物；目前只有仿真结果。
+- **三种底盘**：差速＝车头跟着 PGR 流线走；阿克曼＝同一律加转弯半径限制（n=2，门前势井放远到约 1.75 m，留出摆正的距离）；
+  4D4T＝**行进方向**跟着流线、车头一直对着门的法线，用横移消掉横向偏差，车身不用甩。
+  Gazebo 演示（每种门宽 3 个斜向起点）：三种底盘在 0.90 / 0.80 / 0.72 m 门全部一次通过，离门框最近
+  阿克曼 1.3–1.9 cm、4D4T 0.7–2.8 cm、差速 2.1–2.8 cm（0.72 m 门理论最大 3 cm）。
+- **局限**：200 局正式评测只做了差速轮椅；阿克曼不能原地转，要在门前约 4 m 接手；门前接近区内不能有其他障碍物；
+  目前只有仿真结果。
 
 ## 致谢
 
-PGR（经路生成型调节器）由高岛昭彦提出（2004），由室兰工业大学花岛直彦教授的团队持续发展；本窄门通过器由阿古达目（AGUDAMU）
-在室兰工业大学系统控制工学研究室开发。详见上方 Credits / 謝辞。
+PGR（经路生成型调节器）由高岛昭彦等人提出（2004），由室兰工业大学系统控制工学研究室（花岛直彦教授）扩展到四轮车辆并持续发展；
+本窄门通过器由阿古达目（AGUDAMU）在花岛直彦教授指导下于该研究室开发。详见上方 Credits / 謝辞。

@@ -44,9 +44,26 @@ void pgrd_default_params(pgrd_params *p) {
     p->exit_dist = 2.0;
     p->goal_tol = 0.4;
     p->dt = 0.1;
+    p->chassis = PGRD_DIFF;
+    p->r_min = 1.0;
+    p->beta_max = 0.6;
 }
 
-double pgrd_derived_pre(const pgrd_params *p) { return p->xmax + p->wall_t / 2.0 + 5.0 * p->v_near / p->k; }
+void pgrd_default_params_for(pgrd_params *p, int chassis) {
+    pgrd_default_params(p);
+    p->chassis = chassis;
+    if (chassis == PGRD_ACKERMANN) p->n = 2.0;
+    if (chassis == PGRD_4WS) { p->xmin = -0.525; p->xmax = 0.525; }   /* reference = body centre */
+}
+
+double pgrd_derived_pre(const pgrd_params *p) {
+    double settle = 5.0 * p->v_near / p->k;
+    if (p->chassis == PGRD_ACKERMANN) {                 /* room to straighten with a bounded curvature */
+        double s2 = 2.0 * sqrt(p->r_min * 0.2);
+        if (s2 > settle) settle = s2;
+    }
+    return p->xmax + p->wall_t / 2.0 + settle;
+}
 
 void pgrd_ctrl_init(pgrd_ctrl *c, const pgrd_params *p) {
     c->p = *p;
@@ -62,24 +79,43 @@ double pgrd_flow_heading(double x, double y, pgrd_pose well, double n) {
     return t + well.th;
 }
 
-int pgrd_ctrl_step(pgrd_ctrl *c, pgrd_pose pose, double v_meas, double *v_cmd, double *w_cmd) {
+int pgrd_ctrl_step_body(pgrd_ctrl *c, pgrd_pose pose, double v_meas, double *vx, double *vy, double *wz) {
     const pgrd_params *p = &c->p;
     pgrd_pose well;
     if (c->stage == PGRD_APPROACH && pose.x > -c->pre - 0.05) c->stage = PGRD_EXIT;
     if (c->stage == PGRD_APPROACH) { well.x = -c->pre; well.y = 0.0; well.th = 0.0; }
     else { well.x = p->exit_dist; well.y = 0.0; well.th = 0.0; }
     if (c->stage == PGRD_EXIT && hypot(pose.x - well.x, pose.y - well.y) < p->goal_tol) c->stage = PGRD_DONE;
-    if (c->stage == PGRD_DONE) { *v_cmd = 0.0; *w_cmd = 0.0; return PGRD_DONE; }
+    *vy = 0.0;
+    if (c->stage == PGRD_DONE) { *vx = 0.0; *wz = 0.0; return PGRD_DONE; }
 
+    int near_door = pose.x > -c->pre - 0.5 && pose.x < 1.0;
+    double speed = near_door ? p->v_near : p->v_far;
     double th = pgrd_flow_heading(pose.x, pose.y, well, p->n);
+    if (p->chassis == PGRD_4WS) {                     /* motion along the flow, heading to the door normal */
+        double beta = clampd(pgrd_wrap(th - pose.th), -p->beta_max, p->beta_max);
+        *wz = clampd(p->k * pgrd_wrap(well.th - pose.th), -p->w_max, p->w_max);
+        *vx = speed * cos(beta);
+        *vy = speed * sin(beta);
+        return c->stage;
+    }
     double v = v_meas > 0.1 ? v_meas : 0.1;
     double xn = pose.x + v * cos(pose.th) * p->dt, yn = pose.y + v * sin(pose.th) * p->dt;
     double thn = pgrd_flow_heading(xn, yn, well, p->n);
     double ff = clampd(pgrd_wrap(thn - th) / p->dt, -p->w_max, p->w_max);        /* flow feed-forward */
-    *w_cmd = clampd(ff + p->k * pgrd_wrap(th - pose.th), -p->w_max, p->w_max);
-    int near_door = pose.x > -c->pre - 0.5 && pose.x < 1.0;
-    *v_cmd = near_door ? p->v_near : p->v_far;
+    double w = clampd(ff + p->k * pgrd_wrap(th - pose.th), -p->w_max, p->w_max);
+    if (p->chassis == PGRD_ACKERMANN) {                /* bounded curvature: |w| <= v / r_min */
+        double wlim = speed / p->r_min;
+        w = clampd(w, -wlim, wlim);
+    }
+    *vx = speed;
+    *wz = w;
     return c->stage;
+}
+
+int pgrd_ctrl_step(pgrd_ctrl *c, pgrd_pose pose, double v_meas, double *v_cmd, double *w_cmd) {
+    double vy;
+    return pgrd_ctrl_step_body(c, pose, v_meas, v_cmd, &vy, w_cmd);
 }
 
 /* ------------------------------------------------------------------ door detection */
